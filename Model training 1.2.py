@@ -132,44 +132,7 @@ def main():
 
     # Your existing image_paths and labels here
     image_paths = [
-        #r"C:\Users\lavai\Downloads\strip-test-lateral-flow-assay-for-evaluation-of-an-antibody-europium-particle-conjugate-photographic-image.jpg",  #Positive
-        #r"C:\Users\lavai\Downloads\A-LFIA-with-different-running-buffers-From-left-to-right-strips-with.png", #negative
-        #r"c:\Users\lavai\Downloads\1-s2.0-S0026265X23005507-gr3.jpg", #positive
-        #r"c:\Users\lavai\Downloads\41551_2020_655_Fig3_HTML.png", #negative
-        #r"c:\Users\lavai\Downloads\fbioe-10-1042926-g004.jpg", #Positive
-        #r"c:\Users\lavai\Downloads\The-limit-of-detection-and-cross-reactivity-of-the-lateral-flow-assay-a-b-The-limit-of_Q320.jpg", #negative
-        #r"c:\Users\lavai\Downloads\Fluorescent-images-of-the-LFA-acquired-under-UV-light-and-the-calibration-curves-of_Q320.jpg", #negative
-        #r"c:\Users\lavai\Downloads\Fluorescent-Universal-LFA.jpg", #Negative
-        #r"c:\Users\lavai\Downloads\Capture-204x300.png", #negative
-        #r"c:\Users\lavai\Downloads\WebPageImage2024-04-17-135049.png", #negative
-        #r"c:\Users\lavai\Downloads\Standard-curve-and-linearity-of-the-QD-based-LFIA-strip-n10.png", #negative
-        #r"c:\Users\lavai\Downloads\Screenshot-2024-06-10-103538.png", #positive
-
-        # Next files will only be blank or negative tests. 
-        r"c:\Users\lavai\Downloads\Screenshot 2024-09-14 174731.png", #negative
-        r"c:\Users\lavai\OneDrive\Pictures\Screenshots\Screenshot 2024-09-14 235649.png", #0
-        r"c:\Users\lavai\Downloads\Staphylococcus-aureus-Panton-Valentine-leukocidin-Lateral-Flow-Immunoassay-A-positive_Q320.jpg", # 0 
-        r"c:\Users\lavai\Downloads\Screenshot 2024-10-11 213904.png", #1
-        r"c:\Users\lavai\OneDrive\Pictures\Screenshots\Screenshot 2024-10-11 213452.png",#1
-        r"c:\Users\lavai\OneDrive\Pictures\Screenshots\Screenshot 2024-10-11 213216.png", #1
-        r"c:\Users\lavai\OneDrive\Pictures\Screenshots\Screenshot 2024-10-12 164915.png", #1
-        r"c:\Users\lavai\OneDrive\Pictures\Screenshots\Screenshot 2024-10-12 164858.png",#1
-        r"C:\Users\lavai\OneDrive\Pictures\Screenshots\Screenshot 2024-10-12 170010.png",#0
-        r"c:\Users\lavai\OneDrive\Pictures\Screenshots\Screenshot 2024-10-12 170106.png", #0
-        r"c:\Users\lavai\OneDrive\Pictures\Screenshots\Screenshot 2024-10-12 171000.png",#0
-        r"C:\Users\lavai\OneDrive\Pictures\Screenshots\Screenshot 2024-10-12 171914.png", #0
-        r"c:\Users\lavai\OneDrive\Pictures\Screenshots\Screenshot 2024-10-12 172330.png", #0
-        r"C:\Users\lavai\OneDrive\Pictures\Screenshots\Screenshot 2024-10-13 171201.png", #1
-        r"c:\Users\lavai\OneDrive\Pictures\Screenshots\Screenshot 2024-10-13 172006.png",#1
-        r"C:\Users\lavai\Downloads\IMG_5743.jpg",#1
-        r"C:\Users\lavai\OneDrive\Pictures\Screenshots\Screenshot 2024-10-13 172127.png", #0
-        r"C:\Users\lavai\OneDrive\Pictures\Screenshots\Screenshot 2024-10-11 213904.png", #1
-        r"C:\Users\lavai\OneDrive\Pictures\Screenshots\Screenshot 2024-10-13 165410.png", #1 
-        r"C:\Users\lavai\OneDrive\Pictures\Screenshots\Screenshot 2024-10-13 173229.png", #0
-        r"C:\Users\lavai\OneDrive\Pictures\Screenshots\Screenshot 2024-10-13 173308.png", #1
-        r"C:\Users\lavai\OneDrive\Pictures\Screenshots\Screenshot 2024-10-13 173433.png", #1
-        r"C:\Users\lavai\OneDrive\Pictures\Screenshots\Screenshot 2024-10-13 173504.png", # 0
-        r"C:\Users\lavai\OneDrive\Pictures\Screenshots\Screenshot 2024-10-13 173955.png", # 1
+        
     ]
     labels = [0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1, 1, 0, 1,1, 0, 1]  # 1 label as postive 0 as negative 
 
