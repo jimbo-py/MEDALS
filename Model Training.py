@@ -158,14 +158,7 @@ if __name__ == "__main__":
 
 #James Vaisman
 
-          r"c:\Users\lavai\OneDrive\Pictures\Screenshots\Screenshot 2024-10-13 174643.png" #0 - 
-        r"c:\Users\lavai\OneDrive\Pictures\Screenshots\Screenshot 2024-10-13 174649.png" #1
-        r"c:\Users\lavai\OneDrive\Pictures\Screenshots\Screenshot 2024-10-13 174654.png" #1
-        r"c:\Users\lavai\OneDrive\Pictures\Screenshots\Screenshot 2024-10-13 174701.png" #0
-        r"c:\Users\lavai\OneDrive\Pictures\Screenshots\Screenshot 2024-10-13 174710.png"  #0
-        r"C:\Users\lavai\OneDrive\Pictures\Screenshots\Screenshot 2024-10-13 174728.png"#1
-    ]
-
+         
 
 
 
