@@ -1,3 +1,4 @@
+#Creation of James Vaisman
 import numpy as np
 import cv2
 from sklearn.model_selection import train_test_split, GridSearchCV
@@ -160,7 +161,7 @@ def main():
             prediction = ai_system.predict(image_path)
             if prediction is not None:
                 print(f"Prediction for {image_path}: {'Positive (ALS)' if prediction == 1 else 'Negative'}")
-
+#Creation of James Vaisman
         elif choice == '4':
             print("Exiting the program. Goodbye!")
             break
@@ -172,3 +173,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+#Creation of James Vaisman
