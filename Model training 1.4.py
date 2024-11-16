@@ -8,6 +8,9 @@ from torchvision import transforms, models
 import tensorflow as tf
 from tensorflow.keras.applications import ResNet50V2
 from tensorflow.keras.layers import Dense, GlobalAveragePooling2D
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+from sklearn.svm import SVC
+from sklearn.ensemble import VotingClassifier
 import pandas as pd
 import sqlite3
 import h5py
@@ -26,7 +29,9 @@ import time
 import json
 import pickle
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score, classification_report
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+import seaborn as sns
+import matplotlib.pyplot as plt
 
 class DatabaseConfig:
     def __init__(self, db_type, connection_params):
@@ -63,94 +68,114 @@ class ImageDataLoader:
             self.h5_file = h5py.File(self.db_config.connection_params['file_path'], 'a')
         elif self.db_config.db_type == 'lmdb':
             self.env = lmdb.open(self.db_config.connection_params['path'],
-                               map_size=1099511627776)  # 1TB max size
+                               map_size=1099511627776)
 
-    def get_item(self, idx):
-        if self.db_config.db_type == 'sqlite':
-            return self._get_from_sqlite(idx)
-        elif self.db_config.db_type == 'hdf5':
-            return self._get_from_hdf5(idx)
-        elif self.db_config.db_type == 'lmdb':
-            return self._get_from_lmdb(idx)
-        # Add other database types as needed
-
-    def _get_from_sqlite(self, idx):
-        cursor = self.conn.cursor()
-        cursor.execute("SELECT image_data, label FROM images WHERE id=?", (idx+1,))
-        image_data, label = cursor.fetchone()
-        image = cv2.imdecode(np.frombuffer(image_data, np.uint8), cv2.IMREAD_COLOR)
-        return image, label
-
-    def _get_from_hdf5(self, idx):
-        return self.h5_file['images'][idx], self.h5_file['labels'][idx]
-
-    def _get_from_lmdb(self, idx):
-        with self.env.begin() as txn:
-            key = f'image_{idx}'.encode()
-            value = pickle.loads(txn.get(key))
-            return value['image'], value['label']
-
-class ImmunoassayDataset(Dataset):
-    def __init__(self, image_paths, labels, transform=None):
-        self.image_paths = image_paths
-        self.labels = labels
-        self.transform = transform
-
-    def __len__(self):
-        return len(self.image_paths)
-
-    def __getitem__(self, idx):
-        image = cv2.imread(self.image_paths[idx])
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+class EnsembleClassifier:
+    def __init__(self, voting='soft', n_jobs=-1):
+        self.rf = RandomForestClassifier(
+            n_estimators=100,
+            max_depth=10,
+            min_samples_split=5,
+            n_jobs=n_jobs,
+            random_state=42
+        )
         
-        if self.transform:
-            image = self.transform(image)
+        self.svm = SVC(
+            kernel='rbf',
+            probability=True,
+            C=1.0,
+            random_state=42
+        )
+        
+        self.gb = GradientBoostingClassifier(
+            n_estimators=100,
+            learning_rate=0.1,
+            max_depth=5,
+            random_state=42
+        )
+        
+        self.ensemble = VotingClassifier(
+            estimators=[
+                ('rf', self.rf),
+                ('svm', self.svm),
+                ('gb', self.gb)
+            ],
+            voting=voting,
+            n_jobs=n_jobs
+        )
+        
+        self.individual_predictions = {}
+        
+    def fit(self, X, y):
+        self.ensemble.fit(X, y)
+        return self
+        
+    def predict(self, X):
+        self.individual_predictions = {
+            'RandomForest': self.rf.predict(X),
+            'SVM': self.svm.predict(X),
+            'GradientBoosting': self.gb.predict(X)
+        }
+        return self.ensemble.predict(X)
+    
+    def predict_proba(self, X):
+        return self.ensemble.predict_proba(X)
+    
+    def evaluate(self, X_test, y_test):
+        results = {}
+        ensemble_pred = self.predict(X_test)
+        
+        results['ensemble'] = {
+            'accuracy': accuracy_score(y_test, ensemble_pred),
+            'classification_report': classification_report(y_test, ensemble_pred),
+            'confusion_matrix': confusion_matrix(y_test, ensemble_pred)
+        }
+        
+        for model_name, predictions in self.individual_predictions.items():
+            results[model_name] = {
+                'accuracy': accuracy_score(y_test, predictions),
+                'classification_report': classification_report(y_test, predictions),
+                'confusion_matrix': confusion_matrix(y_test, predictions)
+            }
             
-        label = torch.tensor(self.labels[idx], dtype=torch.long)
-        return image, label
-
-class LargeScaleImmunoassayDataset(Dataset):
-    def __init__(self, data_loader, transform=None):
-        self.data_loader = data_loader
-        self.transform = transform
-        self.length = self._get_dataset_length()
-        
-    def _get_dataset_length(self):
-        if self.data_loader.db_config.db_type == 'sqlite':
-            cursor = self.data_loader.conn.cursor()
-            return cursor.execute("SELECT COUNT(*) FROM images").fetchone()[0]
-        elif self.data_loader.db_config.db_type == 'hdf5':
-            return len(self.data_loader.h5_file['images'])
-        elif self.data_loader.db_config.db_type == 'lmdb':
-            with self.data_loader.env.begin() as txn:
-                return txn.stat()['entries']
-        return 0
-
-    def __len__(self):
-        return self.length
-
-    def __getitem__(self, idx):
-        return self.data_loader.get_item(idx)
+        return results
 
 class PyTorchModel(nn.Module):
-    def __init__(self):
+    def __init__(self, num_classes=2):
         super(PyTorchModel, self).__init__()
         self.resnet = models.resnet18(pretrained=True)
         num_features = self.resnet.fc.in_features
-        self.resnet.fc = nn.Sequential(
-            nn.Linear(num_features, 256),
+        
+        # Feature extraction layers
+        self.features = nn.Sequential(*list(self.resnet.children())[:-1])
+        
+        # Classification layers
+        self.classifier = nn.Sequential(
+            nn.Linear(num_features, 512),
             nn.ReLU(),
             nn.Dropout(0.5),
-            nn.Linear(256, 2)
+            nn.Linear(512, 256),
+            nn.ReLU(),
+            nn.Dropout(0.3),
+            nn.Linear(256, num_classes)
         )
 
     def forward(self, x):
-        return self.resnet(x)
+        features = self.features(x)
+        features = features.view(features.size(0), -1)
+        return self.classifier(features)
+    
+    def extract_features(self, x):
+        features = self.features(x)
+        return features.view(features.size(0), -1)
 
 class EnhancedFluorescentImmunoassayAI:
-    def __init__(self, framework='pytorch', db_config=None):
+    def __init__(self, framework='pytorch', db_config=None, use_ensemble=True):
         self.framework = framework
         self.db_config = db_config
+        self.use_ensemble = use_ensemble
+        
+        # Initialize confidence thresholds
         self.confidence_levels = {
             'very_high': 0.90,
             'high': 0.80,
@@ -158,18 +183,27 @@ class EnhancedFluorescentImmunoassayAI:
             'low': 0.50
         }
         
+        # Initialize models
         if framework == 'pytorch':
             self.init_pytorch_model()
         else:
             self.init_tensorflow_model()
             
+        # Initialize ensemble if enabled
+        if use_ensemble:
+            self.ensemble_classifier = EnsembleClassifier()
+        
+        # Setup data transformations
         self.transform = transforms.Compose([
             transforms.ToTensor(),
             transforms.Resize((224, 224)),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                              std=[0.229, 0.224, 0.225])
+            transforms.Normalize(
+                mean=[0.485, 0.456, 0.406],
+                std=[0.229, 0.224, 0.225]
+            )
         ])
         
+        # Initialize data loader if database config provided
         if db_config:
             self.data_loader = ImageDataLoader(db_config)
 
@@ -184,12 +218,15 @@ class EnhancedFluorescentImmunoassayAI:
         base_model = ResNet50V2(weights='imagenet', include_top=False, input_shape=(224, 224, 3))
         x = base_model.output
         x = GlobalAveragePooling2D()(x)
+        x = Dense(512, activation='relu')(x)
         x = Dense(256, activation='relu')(x)
         predictions = Dense(2, activation='softmax')(x)
         self.model = tf.keras.Model(inputs=base_model.input, outputs=predictions)
-        self.model.compile(optimizer='adam',
-                         loss='sparse_categorical_crossentropy',
-                         metrics=['accuracy'])
+        self.model.compile(
+            optimizer='adam',
+            loss='sparse_categorical_crossentropy',
+            metrics=['accuracy']
+        )
 
     def preprocess_image(self, image):
         if isinstance(image, str):
@@ -198,98 +235,57 @@ class EnhancedFluorescentImmunoassayAI:
         image = cv2.resize(image, (224, 224))
         return image
 
-    def save_to_database(self, image_paths, labels, metadata=None):
-        if not self.db_config:
-            raise ValueError("Database configuration not provided")
-            
-        if self.db_config.db_type == 'sqlite':
-            self._save_to_sqlite(image_paths, labels, metadata)
-        elif self.db_config.db_type == 'hdf5':
-            self._save_to_hdf5(image_paths, labels, metadata)
-        elif self.db_config.db_type == 'lmdb':
-            self._save_to_lmdb(image_paths, labels, metadata)
-
-    def _save_to_sqlite(self, image_paths, labels, metadata):
-        with self.data_loader.conn:
-            cursor = self.data_loader.conn.cursor()
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS images
-                (id INTEGER PRIMARY KEY, image_data BLOB, label INTEGER, metadata TEXT)
-            ''')
-            
-            for path, label, meta in zip(image_paths, labels, metadata or [None] * len(labels)):
-                with open(path, 'rb') as f:
-                    image_data = f.read()
-                cursor.execute(
-                    'INSERT INTO images (image_data, label, metadata) VALUES (?, ?, ?)',
-                    (image_data, label, str(meta))
-                )
-
-    def _save_to_hdf5(self, image_paths, labels, metadata):
-        with h5py.File(self.db_config.connection_params['file_path'], 'a') as f:
-            if 'images' not in f:
-                max_shape = (None, 224, 224, 3)  # Fixed size for all images
-                f.create_dataset('images', shape=(0, 224, 224, 3),
-                               maxshape=max_shape, dtype='uint8')
-                f.create_dataset('labels', shape=(0,), maxshape=(None,), dtype='int')
-            
-            current_len = len(f['images'])
-            new_len = current_len + len(image_paths)
-            
-            f['images'].resize(new_len, axis=0)
-            f['labels'].resize(new_len, axis=0)
-            
-            for i, (path, label) in enumerate(zip(image_paths, labels)):
-                image = self.preprocess_image(path)
-                f['images'][current_len + i] = image
-                f['labels'][current_len + i] = label
-
-    def _save_to_lmdb(self, image_paths, labels, metadata):
-        with self.data_loader.env.begin(write=True) as txn:
-            for i, (path, label) in enumerate(zip(image_paths, labels)):
-                image = self.preprocess_image(path)
-                key = f'image_{i}'.encode()
-                value = {
-                    'image': image,
-                    'label': label,
-                    'metadata': metadata[i] if metadata else None
-                }
-                txn.put(key, pickle.dumps(value))
+    def extract_features(self, images):
+        features = []
+        self.model.eval()
+        
+        with torch.no_grad():
+            for image in tqdm(images, desc="Extracting features"):
+                if isinstance(image, str):
+                    image = self.preprocess_image(image)
+                image_tensor = self.transform(image).unsqueeze(0).to(self.device)
+                features.append(self.model.extract_features(image_tensor).cpu().numpy())
+                
+        return np.vstack(features)
 
     def train_model(self, image_paths, labels, epochs=10, batch_size=32):
-        if self.db_config:
-            self.train_model_from_database(epochs, batch_size)
-        else:
-            X_train, X_val, y_train, y_val = train_test_split(
-                image_paths, labels, test_size=0.2, random_state=42
-            )
-
-            if self.framework == 'pytorch':
-                train_dataset = ImmunoassayDataset(X_train, y_train, transform=self.transform)
-                val_dataset = ImmunoassayDataset(X_val, y_val, transform=self.transform)
-                self._train_pytorch(train_dataset, val_dataset, epochs, batch_size)
-            else:
-                self._train_tensorflow(X_train, y_train, X_val, y_val, epochs, batch_size)
-
-    def train_model_from_database(self, epochs=10, batch_size=32):
-        dataset = LargeScaleImmunoassayDataset(self.data_loader, transform=self.transform)
-        train_size = int(0.8 * len(dataset))
-        val_size = len(dataset) - train_size
-        
-        train_dataset, val_dataset = torch.utils.data.random_split(
-            dataset, [train_size, val_size]
+        X_train, X_val, y_train, y_val = train_test_split(
+            image_paths, labels, test_size=0.2, random_state=42
         )
         
+        # Train deep learning model
         if self.framework == 'pytorch':
-            self._train_pytorch(train_dataset, val_dataset, epochs, batch_size)
+            train_dataset = self.create_dataset(X_train, y_train)
+            val_dataset = self.create_dataset(X_val, y_val)
+            dl_results = self._train_pytorch(train_dataset, val_dataset, epochs, batch_size)
         else:
-            self._train_tensorflow_from_dataset(dataset, epochs, batch_size)
+            dl_results = self._train_tensorflow(X_train, y_train, X_val, y_val, epochs, batch_size)
+        
+        # Train ensemble if enabled
+        if self.use_ensemble:
+            features_train = self.extract_features([self.preprocess_image(img) for img in X_train])
+            features_val = self.extract_features([self.preprocess_image(img) for img in X_val])
+            ensemble_results = self.train_ensemble(features_train, y_train, features_val, y_val)
+            return {'deep_learning': dl_results, 'ensemble': ensemble_results}
+        
+        return {'deep_learning': dl_results}
+
+    def train_ensemble(self, X_train, y_train, X_val, y_val):
+        self.ensemble_classifier.fit(X_train, y_train)
+        return self.ensemble_classifier.evaluate(X_val, y_val)
 
     def _train_pytorch(self, train_dataset, val_dataset, epochs, batch_size):
         train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
         val_loader = DataLoader(val_dataset, batch_size=batch_size)
         
+        history = {
+            'train_loss': [],
+            'val_loss': [],
+            'val_accuracy': []
+        }
+        
         for epoch in range(epochs):
+            # Training phase
             self.model.train()
             train_loss = 0.0
             for images, labels in tqdm(train_loader, desc=f'Epoch {epoch+1}/{epochs}'):
@@ -303,7 +299,7 @@ class EnhancedFluorescentImmunoassayAI:
                 
                 train_loss += loss.item()
             
-            # Validation
+            # Validation phase
             self.model.eval()
             val_loss = 0.0
             correct = 0
@@ -320,16 +316,232 @@ class EnhancedFluorescentImmunoassayAI:
                     total += labels.size(0)
                     correct += (predicted == labels).sum().item()
             
+            # Record metrics
+            history['train_loss'].append(train_loss/len(train_loader))
+            history['val_loss'].append(val_loss/len(val_loader))
+            history['val_accuracy'].append(100 * correct / total)
+            
             print(f'Epoch {epoch+1}/{epochs}')
-            print(f'Training Loss: {train_loss/len(train_loader):.4f}')
-            print(f'Validation Loss: {val_loss/len(val_loader):.4f}')
-            print(f'Validation Accuracy: {100 * correct / total:.2f}%\n')
-
-    def predict(self, image_path):
-        image = self.preprocess_image(image_path)
+            print(f'Training Loss: {history["train_loss"][-1]:.4f}')
+            print(f'Validation Loss: {history["val_loss"][-1]:.4f}')
+            print(f'Validation Accuracy: {history["val_accuracy"][-1]:.2f}%\n')
         
-        if self.framework == 'pytorch':
-            self.model.eval()
+        return history
+
+    def predict(self, image_path, return_confidence=True):
+        image = self.preprocess_image(image_path)
+        image_tensor = self.transform(image).unsqueeze(0).to(self.device)
+        
+        # Deep learning prediction
+        self.model.eval()
+        with torch.no_grad():
+            dl_outputs = self.model(image_tensor)
+            dl_probs = torch.softmax(dl_outputs, dim=1)
+            dl_pred = torch.argmax(dl_probs, dim=1).item()
+            dl_confidence = dl_probs[0][dl_pred].item()
+        
+        # Ensemble prediction if enabled
+        if self.use_ensemble:
+            features = self.extract_features([image])
+            ensemble_pred = self.ensemble_classifier.predict(features)[0]
+            ensemble_probs = self.ensemble_classifier.predict_proba(features)[0]
+            ensemble_confidence = ensemble_probs[ensemble_pred]
+            
+            # Combine predictions
+            final_pred = dl_pred if dl_confidence > ensemble_confidence else ensemble_pred
+            final_confidence = max(dl_confidence, ensemble_confidence)
+        else:
+            final_pred = dl_pred
+            final_confidence = dl_confidence
+        
+        if return_confidence:
+            confidence_level = next(
+                level for level, threshold in self.confidence_levels.items()
+                if final_confidence >= threshold
+            )
+            return final_pred, final_confidence, confidence_level
+        
+        return final_pred
+
+    def visualize_results(self, history):
+        plt.figure(figsize=(12, 4))
+        
+        # Plot training history
+        plt.subplot(1, 2, 1)
+        plt.plot(history['train_loss'], label='Training Loss')
+        plt.plot(history['val_loss'], label='Validation Loss')
+        plt.title('Model Loss')
+        plt.xlabel('Epoch')
+        plt.ylabel('Loss')
+        plt.legend()
+        
+        # Plot accuracy
+        plt.subplot(1, 2, 2)
+        plt
+def visualize_results(self, history):
+        plt.figure(figsize=(12, 4))
+        
+        # Plot training history
+        plt.subplot(1, 2, 1)
+        plt.plot(history['train_loss'], label='Training Loss')
+        plt.plot(history['val_loss'], label='Validation Loss')
+        plt.title('Model Loss')
+        plt.xlabel('Epoch')
+        plt.ylabel('Loss')
+        plt.legend()
+        
+        # Plot accuracy
+        plt.subplot(1, 2, 2)
+        plt.plot(history['val_accuracy'], label='Validation Accuracy')
+        plt.title('Model Accuracy')
+        plt.xlabel('Epoch')
+        plt.ylabel('Accuracy (%)')
+        plt.legend()
+        
+        plt.tight_layout()
+        plt.show()
+
+    def visualize_confusion_matrix(self, y_true, y_pred, class_names=None):
+        cm = confusion_matrix(y_true, y_pred)
+        plt.figure(figsize=(8, 6))
+        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
+                   xticklabels=class_names if class_names else 'auto',
+                   yticklabels=class_names if class_names else 'auto')
+        plt.title('Confusion Matrix')
+        plt.xlabel('Predicted')
+        plt.ylabel('True')
+        plt.show()
+
+    def create_dataset(self, image_paths, labels):
+        """Create a PyTorch dataset from image paths and labels"""
+        images = [self.preprocess_image(path) for path in image_paths]
+        return ImageDataset(images, labels, self.transform)
+
+    def save_model(self, path):
+        """Save the trained model and ensemble classifier"""
+        model_state = {
+            'deep_learning_state': self.model.state_dict(),
+            'ensemble_classifier': self.ensemble_classifier if self.use_ensemble else None,
+            'transform': self.transform,
+            'confidence_levels': self.confidence_levels
+        }
+        torch.save(model_state, path)
+
+    def load_model(self, path):
+        """Load a trained model and ensemble classifier"""
+        model_state = torch.load(path, map_location=self.device)
+        self.model.load_state_dict(model_state['deep_learning_state'])
+        if model_state['ensemble_classifier']:
+            self.ensemble_classifier = model_state['ensemble_classifier']
+            self.use_ensemble = True
+        self.transform = model_state['transform']
+        self.confidence_levels = model_state['confidence_levels']
+
+    def batch_predict(self, image_paths, batch_size=32):
+        """Make predictions on a batch of images"""
+        predictions = []
+        confidences = []
+        confidence_levels = []
+        
+        for i in range(0, len(image_paths), batch_size):
+            batch_paths = image_paths[i:i + batch_size]
+            batch_images = [self.preprocess_image(path) for path in batch_paths]
+            batch_tensors = torch.stack([self.transform(img) for img in batch_images]).to(self.device)
+            
             with torch.no_grad():
-                image_tensor = self.transform(image).unsqueeze(0).to(self.device)
-                outputs = self.model
+                # Deep learning predictions
+                outputs = self.model(batch_tensors)
+                probs = torch.softmax(outputs, dim=1)
+                preds = torch.argmax(probs, dim=1)
+                confs = torch.max(probs, dim=1)[0]
+                
+                if self.use_ensemble:
+                    # Ensemble predictions
+                    features = self.extract_features(batch_images)
+                    ensemble_preds = self.ensemble_classifier.predict(features)
+                    ensemble_probs = self.ensemble_classifier.predict_proba(features)
+                    ensemble_confs = np.max(ensemble_probs, axis=1)
+                    
+                    # Combine predictions based on confidence
+                    for dl_pred, dl_conf, ens_pred, ens_conf in zip(
+                        preds, confs, ensemble_preds, ensemble_confs):
+                        if dl_conf > ens_conf:
+                            predictions.append(dl_pred.item())
+                            confidences.append(dl_conf.item())
+                        else:
+                            predictions.append(ens_pred)
+                            confidences.append(ens_conf)
+                else:
+                    predictions.extend(preds.cpu().numpy())
+                    confidences.extend(confs.cpu().numpy())
+                
+                # Determine confidence levels
+                for conf in confidences[-len(batch_paths):]:
+                    level = next(
+                        level for level, threshold in self.confidence_levels.items()
+                        if conf >= threshold
+                    )
+                    confidence_levels.append(level)
+        
+        return predictions, confidences, confidence_levels
+
+class ImageDataset(Dataset):
+    """PyTorch Dataset for immunoassay images"""
+    def __init__(self, images, labels, transform=None):
+        self.images = images
+        self.labels = labels
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.images)
+
+    def __getitem__(self, idx):
+        image = self.images[idx]
+        label = self.labels[idx]
+        
+        if self.transform:
+            image = self.transform(image)
+            
+        return image, torch.tensor(label, dtype=torch.long)
+
+def example_usage():
+    """Example usage of the Enhanced Fluorescent Immunoassay AI system"""
+    
+    # Initialize the system
+    ai_system = EnhancedFluorescentImmunoassayAI(
+        framework='pytorch',
+        use_ensemble=True
+    )
+    
+    # Sample data
+    image_paths = ['path/to/image1.jpg', 'path/to/image2.jpg']
+    labels = [0, 1]  # Binary classification example
+    
+    # Train the model
+    training_results = ai_system.train_model(
+        image_paths=image_paths,
+        labels=labels,
+        epochs=10,
+        batch_size=32
+    )
+    
+    # Visualize training results
+    ai_system.visualize_results(training_results['deep_learning'])
+    
+    # Make predictions
+    for image_path in image_paths:
+        prediction, confidence, confidence_level = ai_system.predict(
+            image_path,
+            return_confidence=True
+        )
+        print(f"Image: {image_path}")
+        print(f"Prediction: {prediction}")
+        print(f"Confidence: {confidence:.2f}")
+        print(f"Confidence Level: {confidence_level}")
+        print()
+    
+    # Save the model
+    ai_system.save_model('immunoassay_model.pth')
+
+if __name__ == "__main__":
+    example_usage()
