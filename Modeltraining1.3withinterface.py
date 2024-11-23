@@ -292,21 +292,7 @@ class EnhancedALSPredictionUI:
         """Train a new model with the sample data"""
         try:
             image_paths = [
-                r"C:\Users\lavai\OneDrive\Pictures\Screenshots\Screenshot 2024-10-12 165811.png",  
-                r"C:\Users\lavai\OneDrive\Pictures\Screenshots\Screenshot 2024-10-12 170106.png",
-                r"C:\Users\lavai\OneDrive\Pictures\Screenshots\Screenshot 2024-10-12 170247.png",
-                r"C:\Users\lavai\OneDrive\Pictures\Screenshots\Screenshot 2024-10-13 173955.png",
-                r"C:\Users\lavai\OneDrive\Pictures\Screenshots\Screenshot 2024-10-11 213904.png",
-                r"C:\Users\lavai\OneDrive\Pictures\Screenshots\Screenshot 2024-11-15 201944.png",
-                r"C:\Users\lavai\OneDrive\Pictures\Screenshots\Screenshot 2024-11-15 204244.png",
-                r"C:\Users\lavai\OneDrive\Pictures\Screenshots\Screenshot 2024-11-16 195050.png",
-                r"C:\Users\lavai\OneDrive\Pictures\Screenshots\Screenshot 2024-11-16 200919.png",
-                r"C:\Users\lavai\OneDrive\Pictures\Screenshots\Screenshot 2024-11-16 200952.png",
-                r"C:\Users\lavai\OneDrive\Pictures\Screenshots\Screenshot 2024-11-15 210012.png",
-                r"C:\Users\lavai\OneDrive\Pictures\Screenshots\Screenshot 2024-11-15 210003.png",
-                r"C:\Users\lavai\OneDrive\Pictures\Screenshots\Screenshot 2024-11-15 204123.png",
-                r"C:\Users\lavai\OneDrive\Pictures\Screenshots\Screenshot 2024-11-15 204318.png",
-                r"C:\Users\lavai\OneDrive\Pictures\Screenshots\Screenshot 2024-10-13 172127.png",
+               
             ]
             
             labels = [1, 0, 0, 1, 1, 1, 0, 0, 0, 1, 1, 1, 0, 0, 0]
