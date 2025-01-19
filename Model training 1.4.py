@@ -262,7 +262,7 @@ class EnhancedALSPredictionUI:
     def __init__(self, master):
         self.master = master
         master.title("Enhanced ALS Prediction Tool")
-        master.geometry("600x800")
+        master.geometry("800x900")
 
         # Initialize AI system and load model
         self.ai_system = EnhancedFluorescentImmunoassayAI()
@@ -270,7 +270,8 @@ class EnhancedALSPredictionUI:
 
         self.main_frame = tk.Frame(master)
         self.main_frame.pack(padx=20, pady=20, fill=tk.BOTH, expand=True)
-
+        self.main_frame.grid_columnconfigure(0, weight  =1)
+        
         self.create_clinical_section()
         self.create_image_section()
         self.create_results_section()
@@ -346,36 +347,47 @@ class EnhancedALSPredictionUI:
         self.image_status.pack()
 
     def create_results_section(self):
-        # Create results frame with proper configuration
+    # Create results frame
         results_frame = tk.LabelFrame(self.main_frame, text="Results", padx=10, pady=10)
         results_frame.pack(fill=tk.BOTH, expand=True, pady=10)
-        results_frame.grid_columnconfigure(0, weight=1)
-        results_frame.grid_rowconfigure(2, weight=1)  # Make row with text widget expandable
 
-        # Add NCS input fields (row 0)
+    # Add NCS input fields
         self.create_ncs_inputs(results_frame)
 
-        # Calculate button (row 1)
+    # Calculate button
         self.calculate_button = tk.Button(results_frame, text="Calculate", command=self.calculate_als_chance)
         self.calculate_button.pack(pady=10)
 
-        # Create a frame for the text widget with scrollbar (row 2)
+    # Create a frame specifically for the text widget and scrollbar
         text_frame = tk.Frame(results_frame)
         text_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
-        # Add scrollbar
+    # Create and configure scrollbar
         scrollbar = tk.Scrollbar(text_frame)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
-        # Configure text widget with scrollbar
-        self.result_text = tk.Text(text_frame, height=20, wrap=tk.WORD, yscrollcommand=scrollbar.set)
-        self.result_text.pack(fill=tk.BOTH, expand=True)
+    # Create and configure text widget
+        self.result_text = tk.Text(
+        text_frame,
+        height=20,
+        width=60,  # Set a reasonable width
+        wrap=tk.WORD,
+        yscrollcommand=scrollbar.set,
+        font=('TkDefaultFont', 10)  # Set a clear font
+    )
+        self.result_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+    
+    # Configure scrollbar to work with text widget
         scrollbar.config(command=self.result_text.yview)
 
-        # Save button (row 3)
+    # Configure text widget to be read-only
+        self.result_text.config(state=tk.NORMAL)
+        self.result_text.insert(tk.END, "Results will appear here after calculation...")
+        self.result_text.config(state=tk.DISABLED)
+
+    # Save button
         self.save_button = tk.Button(results_frame, text="Save Results", command=self.save_results)
         self.save_button.pack(pady=5)
-
 
 
     def create_ncs_inputs(self, parent_frame):
@@ -466,28 +478,35 @@ class EnhancedALSPredictionUI:
             return
 
         try:
-            # Clear previous results
+        # Enable text widget for editing
+            self.result_text.config(state=tk.NORMAL)
+        
+        # Clear previous results
             self.result_text.delete(1.0, tk.END)
             self.result_text.update()
 
-            # Load and analyze image
+        # Load and analyze image
             image = cv2.imread(self.image_path)
             if image is None:
                 raise ValueError("Failed to read the image")
 
-            # Get prediction from AI system
+        # Get prediction from AI system
             prediction_results = self.ai_system.predict(image)
 
-            # Integrate NCS data into the analysis
+        # Integrate NCS data into the analysis
             self.integrate_ncs_analysis(prediction_results, ncs_data)
 
-            # Format results
+        # Format results
             self.display_results(prediction_results)
+        
+        # Disable text widget after adding content
+            self.result_text.config(state=tk.DISABLED)
 
         except Exception as e:
             messagebox.showerror("Error", f"Analysis failed: {str(e)}")
             self.result_text.delete(1.0, tk.END)
             self.result_text.insert(tk.END, f"Error during analysis: {str(e)}")
+            self.result_text.config(state=tk.DISABLED)
 
     def integrate_ncs_analysis(self, prediction_results, ncs_data):
         """Integrate NCS data into the prediction results."""
@@ -574,9 +593,9 @@ class EnhancedALSPredictionUI:
         self.result_text.insert(tk.END, "\n")  # Added extra space for better readability
 
     # Add timestamp
+        
         self.result_text.insert(tk.END, f"\nAnalysis completed at: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
-
-
+    
     def save_results(self):
         """Save the analysis results to a file."""
         if not self.result_text.get(1.0, tk.END).strip():
