@@ -541,60 +541,91 @@ class EnhancedALSPredictionUI:
 
     def display_results(self, prediction_results):
         """Display the analysis results, including NCS analysis, in a formatted way."""
+        results_window = tk.Toplevel(self.master)
+        results_window.title("Analysis Results")
+        results_window.geometry("800x900")
+    
+        frame = tk.Frame(results_window)
+        frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+
+    # Add scrollbar
+        scrollbar = tk.Scrollbar(frame)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+    # Create text widget
+        results_text = tk.Text(
+            frame,
+            wrap=tk.WORD,
+            yscrollcommand=scrollbar.set,
+            font=('TkDefaultFont', 10)
+    )
+        results_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+    # Configure scrollbar
+        scrollbar.config(command=results_text.yview)
+    
     # Clinical Information Summary
-        self.result_text.insert(tk.END, "CLINICAL INFORMATION\n")
-        self.result_text.insert(tk.END, "-" * 50 + "\n")
-        self.result_text.insert(tk.END, f"Age: {self.age_entry.get()} years\n")
-        self.result_text.insert(tk.END, f"Sex: {self.sex_var.get()}\n")
-        self.result_text.insert(tk.END, f"Background: {self.eth_var.get()}\n")
-        self.result_text.insert(tk.END, f"ALSFRS-R Score: {self.alsfrs_entry.get()}\n")
-        self.result_text.insert(tk.END, "\n")  # Added extra space for better readability
+        results_text.insert(tk.END, "CLINICAL INFORMATION\n")
+        results_text.insert(tk.END, "-" * 50 + "\n")
+        results_text.insert(tk.END, f"Age: {self.age_entry.get()} years\n")
+        results_text.insert(tk.END, f"Sex: {self.sex_var.get()}\n")
+        results_text.insert(tk.END, f"Background: {self.eth_var.get()}\n")
+        results_text.insert(tk.END, f"ALSFRS-R Score: {self.alsfrs_entry.get()}\n")
+        results_text.insert(tk.END, "\n")
 
     # NCS Results
-        self.result_text.insert(tk.END, "NERVE CONDUCTION STUDY RESULTS\n")
-        self.result_text.insert(tk.END, "-" * 50 + "\n")
-        self.result_text.insert(tk.END, f"Motor Nerve Conduction Velocity (m/s): {self.motor_ncv_entry.get()}\n")
-        self.result_text.insert(tk.END, f"Sensory Nerve Conduction Velocity (m/s): {self.sensory_ncv_entry.get()}\n")
-        self.result_text.insert(tk.END, f"Compound Muscle Action Potential (mV): {self.cmap_entry.get()}\n")
-        self.result_text.insert(tk.END, f"Sensory Nerve Action Potential (μV): {self.snap_entry.get()}\n")
-        self.result_text.insert(tk.END, "\n")  # Added extra space for better readability
+        results_text.insert(tk.END, "NERVE CONDUCTION STUDY RESULTS\n")
+        results_text.insert(tk.END, "-" * 50 + "\n")
+        results_text.insert(tk.END, f"Motor Nerve Conduction Velocity (m/s): {self.motor_ncv_entry.get()}\n")
+        results_text.insert(tk.END, f"Sensory Nerve Conduction Velocity (m/s): {self.sensory_ncv_entry.get()}\n")
+        results_text.insert(tk.END, f"Compound Muscle Action Potential (mV): {self.cmap_entry.get()}\n")
+        results_text.insert(tk.END, f"Sensory Nerve Action Potential (μV): {self.snap_entry.get()}\n")
+        results_text.insert(tk.END, "\n")
 
     # NCS Analysis
-        self.result_text.insert(tk.END, "NERVE CONDUCTION STUDY ANALYSIS\n")
-        self.result_text.insert(tk.END, "-" * 50 + "\n")
+        results_text.insert(tk.END, "NERVE CONDUCTION STUDY ANALYSIS\n")
+        results_text.insert(tk.END, "-" * 50 + "\n")
         for line in prediction_results["ncs_analysis"]:
-            self.result_text.insert(tk.END, f"{line}\n")
-        self.result_text.insert(tk.END, "\n")  # Added extra space for better readability
+            results_text.insert(tk.END, f"{line}\n")
+        results_text.insert(tk.END, "\n")
 
     # Analysis Results
-        self.result_text.insert(tk.END, "ANALYSIS RESULTS\n")
-        self.result_text.insert(tk.END, "-" * 50 + "\n")
-        self.result_text.insert(tk.END, f"Prediction: {prediction_results['prediction']}\n")
-        self.result_text.insert(tk.END, f"Confidence Level: {prediction_results['confidence_level'].replace('_', ' ').title()}\n")
-        self.result_text.insert(tk.END, f"Confidence Score: {prediction_results['confidence_score']:.2%}\n")
-        self.result_text.insert(tk.END, f"Signal Quality: {prediction_results['signal_quality']}\n")
-        self.result_text.insert(tk.END, "\n")  # Added extra space for better readability
+        results_text.insert(tk.END, "ANALYSIS RESULTS\n")
+        results_text.insert(tk.END, "-" * 50 + "\n")
+        results_text.insert(tk.END, f"Prediction: {prediction_results['prediction']}\n")
+        results_text.insert(tk.END, f"Confidence Level: {prediction_results['confidence_level'].replace('_', ' ').title()}\n")
+        results_text.insert(tk.END, f"Confidence Score: {prediction_results['confidence_score']:.2%}\n")
+        results_text.insert(tk.END, f"Signal Quality: {prediction_results['signal_quality']}\n")
+        results_text.insert(tk.END, "\n")
 
     # Detailed Analysis
-        self.result_text.insert(tk.END, "DETAILED ANALYSIS\n")
-        self.result_text.insert(tk.END, "-" * 50 + "\n")
+        results_text.insert(tk.END, "DETAILED ANALYSIS\n")
+        results_text.insert(tk.END, "-" * 50 + "\n")
         analysis = prediction_results['analysis']
-        self.result_text.insert(tk.END, f"Mean Intensity: {analysis['mean_intensity']:.2f}\n")
-        self.result_text.insert(tk.END, f"Maximum Intensity: {analysis['max_intensity']:.2f}\n")
-        self.result_text.insert(tk.END, f"Signal Area: {analysis['signal_area']:.2f}\n")
-        self.result_text.insert(tk.END, f"Signal-to-Noise Ratio: {analysis['signal_to_noise']:.2f}\n")
-        self.result_text.insert(tk.END, f"Intensity Ratio: {analysis['intensity_ratio']:.2f}\n")
-        self.result_text.insert(tk.END, "\n")  # Added extra space for better readability
+        results_text.insert(tk.END, f"Mean Intensity: {analysis['mean_intensity']:.2f}\n")
+        results_text.insert(tk.END, f"Maximum Intensity: {analysis['max_intensity']:.2f}\n")
+        results_text.insert(tk.END, f"Signal Area: {analysis['signal_area']:.2f}\n")
+        results_text.insert(tk.END, f"Signal-to-Noise Ratio: {analysis['signal_to_noise']:.2f}\n")
+        results_text.insert(tk.END, f"Intensity Ratio: {analysis['intensity_ratio']:.2f}\n")
+        results_text.insert(tk.END, "\n")
 
     # Interpretation
-        self.result_text.insert(tk.END, "INTERPRETATION\n")
-        self.result_text.insert(tk.END, "-" * 50 + "\n")
-        self.result_text.insert(tk.END, f"{prediction_results['interpretation']}\n")
-        self.result_text.insert(tk.END, "\n")  # Added extra space for better readability
+        results_text.insert(tk.END, "INTERPRETATION\n")
+        results_text.insert(tk.END, "-" * 50 + "\n")
+        results_text.insert(tk.END, f"{prediction_results['interpretation']}\n")
+        results_text.insert(tk.END, "\n")
 
     # Add timestamp
-        
-        self.result_text.insert(tk.END, f"\nAnalysis completed at: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+        results_text.insert(tk.END, f"\nAnalysis completed at: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+
+    # Make the text widget read-only
+        results_text.config(state=tk.DISABLED)
+
+    # Also update the main window's result text
+        self.result_text.config(state=tk.NORMAL)
+        self.result_text.delete(1.0, tk.END)
+        self.result_text.insert(tk.END, results_text.get(1.0, tk.END))
+        self.result_text.config(state=tk.DISABLED)
     
     def save_results(self):
         """Save the analysis results to a file."""
